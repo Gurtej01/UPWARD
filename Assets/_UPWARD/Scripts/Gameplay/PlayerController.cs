@@ -1,8 +1,8 @@
-﻿using System.Net.NetworkInformation;
-using UnityEngine;
+﻿using UnityEngine;
+using UnityEngine.InputSystem;
 
 /// <summary>
-/// Handles player movement and jumping with physics-based controls
+/// Handles ONLY player movement and jumping. Nothing else.
 /// </summary>
 public class PlayerController : MonoBehaviour
 {
@@ -13,6 +13,9 @@ public class PlayerController : MonoBehaviour
 
     [Tooltip("Maximum horizontal velocity in m/s")]
     [SerializeField] private float maxSpeed = 4f;
+
+    [Tooltip("Air control as percentage of ground speed")]
+    [SerializeField] private float airControlMultiplier = 0.5f;
 
     [Header("Jump Settings")]
     [Tooltip("Desired jump height in meters")]
@@ -32,14 +35,14 @@ public class PlayerController : MonoBehaviour
     private bool jumpPressed = false;
     private float jumpForce;
     private bool isGrounded = false;
+    private Vector2 joystickInput = Vector2.zero;
+    private bool canMove = true; // Controlled externally (e.g., by KnockbackHandler)
     #endregion
 
     #region Unity Lifecycle
     void Start()
     {
         rb = GetComponent<Rigidbody>();
-
-        // Calculate jump force from desired height
         jumpForce = Mathf.Sqrt(2f * -Physics.gravity.y * jumpHeight);
     }
 
@@ -51,29 +54,41 @@ public class PlayerController : MonoBehaviour
     void FixedUpdate()
     {
         isGrounded = CheckGrounded();
-        ApplyMovement();
-        ClampVelocity();
+
+        if (canMove)
+        {
+            ApplyMovement();
+            ClampVelocity();
+        }
+
         HandleJump();
+    }
+    #endregion
+
+    #region Input System
+    public void OnMove(InputAction.CallbackContext ctx)
+    {
+        joystickInput = ctx.ReadValue<Vector2>();
+    }
+
+    public void OnJump(InputAction.CallbackContext ctx)
+    {
+        if (ctx.performed) jumpPressed = true;
     }
     #endregion
 
     #region Private Methods
     private void HandleInput()
     {
-        // Reset input
-        horizontalInput = 0f;
+        // Keyboard input
+        float keyboard = 0f;
+        if (Input.GetKey(KeyCode.D)) keyboard = 1f;
+        if (Input.GetKey(KeyCode.A)) keyboard = -1f;
 
-        // Read horizontal movement
-        if (Input.GetKey(KeyCode.D))
-        {
-            horizontalInput = 1f;
-        }
-        if (Input.GetKey(KeyCode.A))
-        {
-            horizontalInput = -1f;
-        }
+        // Combine keyboard + joystick
+        horizontalInput = Mathf.Clamp(keyboard + joystickInput.x, -1f, 1f);
 
-        // Read jump input
+        // Keyboard jump
         if (Input.GetKeyDown(KeyCode.Space))
         {
             jumpPressed = true;
@@ -88,14 +103,10 @@ public class PlayerController : MonoBehaviour
     private void ClampVelocity()
     {
         Vector3 clampedVelocity = rb.linearVelocity;
-        if (isGrounded)
-        {
-            clampedVelocity.x = Mathf.Clamp(clampedVelocity.x, -maxSpeed, maxSpeed);
-        }
-        else 
-        {
-            clampedVelocity.x = Mathf.Clamp(clampedVelocity.x, -maxSpeed * 0.09f, maxSpeed * 0.09f);
-        }
+
+        float effectiveMaxSpeed = isGrounded ? maxSpeed : maxSpeed * airControlMultiplier;
+        clampedVelocity.x = Mathf.Clamp(clampedVelocity.x, -effectiveMaxSpeed, effectiveMaxSpeed);
+
         rb.linearVelocity = clampedVelocity;
     }
 
@@ -110,13 +121,27 @@ public class PlayerController : MonoBehaviour
 
     private bool CheckGrounded()
     {
-        float rayDistance = groundCheckDistance;
         Vector3 rayOrigin = transform.position;
-
-
-        bool hit = Physics.Raycast(rayOrigin, Vector3.down, rayDistance, groundLayer);
-
+        bool hit = Physics.Raycast(rayOrigin, Vector3.down, groundCheckDistance, groundLayer);
         return hit;
+    }
+    #endregion
+
+    #region Public Methods
+    /// <summary>
+    /// Enable or disable player movement (e.g., during stun)
+    /// </summary>
+    public void SetCanMove(bool canMove)
+    {
+        this.canMove = canMove;
+    }
+
+    /// <summary>
+    /// Check if player is currently grounded
+    /// </summary>
+    public bool IsGrounded()
+    {
+        return isGrounded;
     }
     #endregion
 }

@@ -46,7 +46,7 @@ public class DodgePlatformSpawner : MonoBehaviour
     {
         // Decide left or right side
         bool spawnRight = Random.Range(0, 2) == 0;
-
+          
         // Generate random X position for chosen side
         float finalXpos = spawnRight
             ? Random.Range(rightMinX, rightMaxX)
