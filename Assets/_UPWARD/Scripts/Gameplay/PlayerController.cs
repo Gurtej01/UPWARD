@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.Rendering;
 
 /// <summary>
 /// Handles ONLY player movement and jumping. Nothing else.
@@ -27,6 +28,9 @@ public class PlayerController : MonoBehaviour
 
     [Tooltip("What layers count as ground")]
     [SerializeField] private LayerMask groundLayer;
+
+    [Header("Rotation")]
+    [SerializeField] private float rotationSpeed = 10f;
     #endregion
 
     #region Private Fields
@@ -38,17 +42,17 @@ public class PlayerController : MonoBehaviour
     private Vector2 joystickInput = Vector2.zero;
     private bool canMove = true; // Controlled externally (e.g., by KnockbackHandler)
     #endregion
-
     #region Unity Lifecycle
-    void Start()
+    void Start() 
     {
         rb = GetComponent<Rigidbody>();
-        jumpForce = Mathf.Sqrt(2f * -Physics.gravity.y * jumpHeight);
+        jumpForce = Mathf.Sqrt(2 * Physics.gravity.magnitude * jumpHeight);
     }
 
     void Update()
     {
         HandleInput();
+        HandleRotation();
     }
 
     void FixedUpdate()
@@ -82,8 +86,14 @@ public class PlayerController : MonoBehaviour
     {
         // Keyboard input
         float keyboard = 0f;
-        if (Input.GetKey(KeyCode.D)) keyboard = 1f;
-        if (Input.GetKey(KeyCode.A)) keyboard = -1f;
+        if (Input.GetKey(KeyCode.D))
+        {
+            keyboard = 1f;
+        }
+        if (Input.GetKey(KeyCode.A))
+        {
+            keyboard = -1f;
+        }
 
         // Combine keyboard + joystick
         horizontalInput = Mathf.Clamp(keyboard + joystickInput.x, -1f, 1f);
@@ -125,6 +135,28 @@ public class PlayerController : MonoBehaviour
         bool hit = Physics.Raycast(rayOrigin, Vector3.down, groundCheckDistance, groundLayer);
         return hit;
     }
+
+    private void HandleRotation()
+    {
+        // Only rotate if actually moving
+        if (Mathf.Abs(rb.linearVelocity.x) > 0.1f)
+        {
+            // Determine target rotation based on movement direction
+            Quaternion targetRotation;
+
+            if (rb.linearVelocity.x > 0) // Moving right
+            {
+                targetRotation = Quaternion.Euler(-90, 90, 0);
+            }
+            else // Moving left
+            {
+                targetRotation = Quaternion.Euler(-90, -90, 0); // or 270
+            }
+
+            // Smoothly rotate towards target
+            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.fixedDeltaTime * rotationSpeed);
+        }
+    }
     #endregion
 
     #region Public Methods
@@ -142,6 +174,40 @@ public class PlayerController : MonoBehaviour
     public bool IsGrounded()
     {
         return isGrounded;
+    }
+    #endregion
+
+    #region Public Getters for Animation
+    /// <summary>
+    /// Check if player is idle (not moving, on ground)
+    /// </summary>
+    public bool IsIdle()
+    {
+        return isGrounded && Mathf.Abs(rb.linearVelocity.x) < 0.1f;
+    }
+
+    /// <summary>
+    /// Check if player is running (moving on ground)
+    /// </summary>
+    public bool IsRunning()
+    {
+        return isGrounded && Mathf.Abs(rb.linearVelocity.x) >= 0.1f;
+    }
+
+    /// <summary>
+    /// Check if player is jumping (moving upward)
+    /// </summary>
+    public bool IsJumping()
+    {
+        return !isGrounded && rb.linearVelocity.y > 0.1f;
+    }
+
+    /// <summary>
+    /// Check if player is falling (moving downward)
+    /// </summary>
+    public bool IsFalling()
+    {
+        return !isGrounded && rb.linearVelocity.y < -0.1f;
     }
     #endregion
 }
